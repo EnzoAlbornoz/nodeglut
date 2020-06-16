@@ -1,0 +1,16 @@
+{
+	"name": "nodeglut",
+	"version": "0.1.0",
+	"description": "FreeGLUT bindings for Node.JS",
+	"main": "index.js",
+	"author": "Enzo Coelho Albornoz <enzocoelhoalbornoz@gmail.com>",
+	"license": "MIT",
+	"private": false,
+	"scripts": {
+		"build": "cmake-js build"
+	},
+	"dependencies": {
+		"cmake-js": "^6.1.0",
+		"node-addon-api": "^3.0.0"
+	}
+}
