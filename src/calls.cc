@@ -1,7 +1,70 @@
+#include <unistd.h>
+#include <unordered_map>
 #include <napi.h>
 #include <GL/freeglut.h>
 #include <GL/freeglut_ucall.h>
 
+// AUX Structs
+typedef struct NAPI_CB_REF_S {
+	napi_ref ref;
+	napi_env env;
+} NAPI_CB_REF;
+
+typedef struct NAPI_CB_VAL_S {
+	napi_value val;
+	napi_env env;
+} NAPI_CB_VAL;
+
+struct NAPI_CB_MENUS {
+	// Menu Callbacks
+	std::unordered_map<int, Napi::FunctionReference> _glutCreateMenu;
+	Napi::FunctionReference _glutMenuDestroyFunc;
+};
+
+struct NAPI_CB_WINDOWS {
+	// Window callbacks
+	std::unordered_map<int,Napi::FunctionReference> _glutDisplayFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutOverlayDisplayFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutReshapeFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutPositionFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutCloseFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutKeyboardFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutSpecialFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutKeyboardUpFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutSpecialUpFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutMotionFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutPassiveMotionFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutMouseFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutMouseWheelFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutEntryFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutJoystickFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutSpaceballMotionFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutSpaceballRotateFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutSpaceballButtonFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutButtonBoxFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutDialsFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutTabletMotionFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutTabletButtonFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutVisibilityFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutWindowStatusFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutMultiEntryFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutMultiButtonFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutMultiMotionFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutMultiPassiveFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutInitContextFunc;
+	std::unordered_map<int,Napi::FunctionReference> _glutAppStatusFunc;
+};
+
+struct NAPI_CB_GLOBAL {
+	// Global Callbacks
+	Napi::FunctionReference _glutIdleFunc;
+	Napi::FunctionReference _glutMenuStatusFunc;
+	Napi::FunctionReference _glutMenuStateFunc;
+};
+
+static NAPI_CB_MENUS  menusCallbacks;
+static NAPI_CB_WINDOWS windowsCallbacks;
+static NAPI_CB_GLOBAL globalCallbacks;
 // FreeGLUT 3.2 Function Bindings ==============================================
 
 void _glutInit(const Napi::CallbackInfo& info) {
@@ -80,62 +143,66 @@ void _glutInitDisplayString(const Napi::CallbackInfo& info) {
 	return;
 }
 
+Napi::FunctionReference _glutInitErrorFuncCBRef;
 void _glutInitErrorFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
 	// Get Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
+	Napi::Function callbackJS = info[0].As<Napi::Function>();
+	// Define CBRef
+	_glutInitErrorFuncCBRef.Reset();
+	_glutInitErrorFuncCBRef.Reset(callbackJS,1);
 	// Define Native Callback
-	auto callback = [](const char *fmt, va_list ap, void *user_data) {
+	auto callback = [](const char *fmt, va_list ap) {
 		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
+		Napi::Function callbackJS = _glutInitErrorFuncCBRef.Value();
+		Napi::Env env = callbackJS.Env();
 		Napi::HandleScope scope(env);
 		// Get Params
 		va_list vaCp;
 		va_copy(vaCp, ap);
 		// Format String
-		size_t strSize = 1 + snprintf(nullptr, 0, fmt, vaCp);
+		size_t strSize = 1 + vsnprintf(nullptr, 0, fmt, vaCp);
 		char strMessage[strSize];
-		snprintf(strMessage, strSize, fmt, ap);
+		vsnprintf(strMessage, strSize, fmt, ap);
 		// Send Message
-		napi_value args[] = { Napi::String::New(env, strMessage) };
-		callbackJS->MakeCallback(env.Undefined(), 1, args);
-		callbackJS->Unref();
+		callbackJS.Call({ Napi::String::New(env, strMessage) });
 	};
 	// Exec Function
-	glutInitErrorFuncUcall(callback, callbackJS);
+	glutInitErrorFunc(callback);
 	// Return Values
 	return;
 }
 
+Napi::FunctionReference _glutInitWarningFuncCBRef;
 void _glutInitWarningFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
 	// Get Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
+	Napi::Function callbackJS = info[0].As<Napi::Function>();
+	// Define CBRef
+	_glutInitWarningFuncCBRef.Reset();
+	_glutInitWarningFuncCBRef.Reset(callbackJS,1);
 	// Define Native Callback
-	auto callback = [](const char *fmt, va_list ap, void *user_data) {
+	auto callback = [](const char *fmt, va_list ap) {
 		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
+		Napi::Function callbackJS = _glutInitWarningFuncCBRef.Value();
+		Napi::Env env = callbackJS.Env();
 		Napi::HandleScope scope(env);
 		// Get Params
 		va_list vaCp;
 		va_copy(vaCp, ap);
 		// Format String
-		size_t strSize = 1 + snprintf(nullptr, 0, fmt, vaCp);
+		size_t strSize = 1 + vsnprintf(nullptr, 0, fmt, vaCp);
 		char strMessage[strSize];
-		snprintf(strMessage, strSize, fmt, ap);
+		vsnprintf(strMessage, strSize, fmt, ap);
 		// Send Message
-		napi_value args[] = { Napi::String::New(env, strMessage) };
-		callbackJS->MakeCallback(env.Undefined(), 1, args);
-		callbackJS->Unref();
+		callbackJS.Call({ Napi::String::New(env, strMessage) });
 	};
 	// Exec Function
-	glutInitWarningFuncUcall(callback, callbackJS);
+	glutInitWarningFunc(callback);
 	// Return Values
 	return;
 }
@@ -517,20 +584,24 @@ Napi::Number _glutCreateMenu(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
 	// Get Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
+	Napi::Function callbackJS = info[0].As<Napi::Function>();
 	// Define Native Callback
-	auto callback = [](int value, void *user_data) {
+	auto callback = [](int value) {
+		// Get Current Menu and Window
+		int currMenu = glutGetMenu();
 		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
+		Napi::Function callbackJS = menusCallbacks._glutCreateMenu[currMenu].Value();
+		Napi::Env env = callbackJS.Env();
 		Napi::HandleScope scope(env);
 		// Call JS Callback
 		napi_value args[] = { Napi::Number::New(env, value) };
-		callbackJS->MakeCallback(env.Undefined(), 1, args);
-		callbackJS->Unref();
+		callbackJS.MakeCallback(Napi::Object::New(env), 1, args);
 	};
 	// Exec Function
-	int menuId = glutCreateMenuUcall(callback, callbackJS);
+	int menuId = glutCreateMenu(callback);
+	// Set Current Callback for Menu
+	menusCallbacks._glutCreateMenu[menuId].Reset(callbackJS, 1U);
+	menusCallbacks._glutCreateMenu[menuId].SuppressDestruct();
 	// Return Values
 	return Napi::Number::New(env, menuId);
 }
@@ -541,6 +612,10 @@ void _glutDestroyMenu(const Napi::CallbackInfo& info) {
 	Napi::HandleScope scope(env);
 	// Load Params
 	int menu = info[0].As<Napi::Number>().Int32Value();
+	// Clear Callbacks References
+	menusCallbacks._glutCreateMenu[menu].Reset();
+	// Clear Map Entry
+	menusCallbacks._glutCreateMenu.erase(menu);
 	// Exec Function
 	glutDestroyMenu(menu);
 	// Return Values
@@ -677,20 +752,22 @@ void _glutMenuDestroyFunc(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
 	// Get Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
+	Napi::Function callbackJS = info[0].As<Napi::Function>();
+	// Reset Callback Reference
+	menusCallbacks._glutMenuDestroyFunc.Reset(callbackJS, 1U);
+	menusCallbacks._glutMenuDestroyFunc.SuppressDestruct();
 	// Define Native Callback
-	auto callback = [](void *user_data) {
+	auto callback = []() {
 		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
+		Napi::Function callbackJS = menusCallbacks._glutMenuDestroyFunc.Value();
+		Napi::Env env = callbackJS.Env();
 		Napi::HandleScope scope(env);
 		// Call JS Callback
 		napi_value args[] = {};
-		callbackJS->MakeCallback(env.Undefined(), 0, args);
-		callbackJS->Unref();
+		callbackJS.MakeCallback(Napi::Object::New(env), 0, args);
 	};
 	// Exec Function
-	glutMenuDestroyFuncUcall(callback, callbackJS);
+	glutMenuDestroyFunc(callback);
 	// Return Values
 	return;
 }
@@ -701,121 +778,169 @@ void _glutTimerFunc(const Napi::CallbackInfo& info) {
 	Napi::HandleScope scope(env);
 	// Load Params
 	unsigned int msecs = info[0].As<Napi::Number>().Uint32Value();
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[1].As<Napi::Function>());
+	Napi::FunctionReference callbackJS = Napi::Persistent(info[1].As<Napi::Function>());
 	int value = info[2].As<Napi::Number>().Int32Value();
+	// Setup CBRef
+	callbackJS.SuppressDestruct();
+	NAPI_CB_REF* cbref = new NAPI_CB_REF {
+		napi_ref(callbackJS),
+		napi_env(callbackJS.Env())
+	};
 	// Define Native Callback
 	auto callback = [](int value, void *user_data) {
+		// Define Callback Ref
+		NAPI_CB_REF* cbref = (NAPI_CB_REF*) user_data;
 		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
+		Napi::FunctionReference callbackJS(cbref->env, cbref->ref);
+		Napi::Env env = callbackJS.Env();
 		Napi::HandleScope scope(env);
 		// Call JS Callback
-		napi_value args[] = { Napi::Number::New(env, value) };
-		callbackJS->MakeCallback(env.Undefined(), 1, args);
-		callbackJS->Unref();
+		callbackJS.Call({ Napi::Number::New(env, value) });
+		callbackJS.Unref();
+		// Delete CBRef
+		delete cbref;
 	};
 	// Exec Function
-	glutTimerFuncUcall(msecs, callback, value, callbackJS);
+	glutTimerFuncUcall(msecs, callback, value, cbref);
 	// Return Values
 	return;
 }
 
+//! Memory Leak On This Function !//
+// TODO: FIX MEMORY LEAK -> It iterates so much that I think that V8 can't handle it without allocate heap wildly
 void _glutIdleFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {};
-		callbackJS->MakeCallback(env.Undefined(), 0, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutIdleFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+	// TODO: By now, throw an error that alert about memory leak
+	if (info.Length() < 2 || !info[1].IsBoolean() || !info[1].As<Napi::Boolean>().Value()) {
+		return Napi::Error::New(env, "This method, for now, may end up causing memory leak. I'm working to resolve this issue").ThrowAsJavaScriptException();
+	}
+	// Check Disable Function
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Reset Function
+		globalCallbacks._glutIdleFunc.Reset();
+		// Exec Function
+		glutIdleFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Setup Reference
+		globalCallbacks._glutIdleFunc.Reset();
+		globalCallbacks._glutIdleFunc.Reset(callbackJS, 1U);
+		// Define Native Callback
+		auto callback = []() {
+			// Define JS Callback
+			Napi::Function callbackJS = globalCallbacks._glutIdleFunc.Value();
+			// Call JS Callback
+			callbackJS.Call({});
+		};
+		// Exec Function
+		glutIdleFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutMenuStatusFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int status, int x, int y, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, status),
-			Napi::Number::New(env,x),
-			Napi::Number::New(env,y)
+	// Check Disable Function
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Reset Function
+		globalCallbacks._glutMenuStatusFunc.Reset();
+		// Exec Function
+		glutMenuStatusFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Setup Reference
+		globalCallbacks._glutMenuStatusFunc.Reset(callbackJS, 1U);
+		globalCallbacks._glutMenuStatusFunc.SuppressDestruct();
+		// Define Native Callback
+		auto callback = [](int status, int x, int y) {
+			// Define JS Callback
+			Napi::Function callbackJS = globalCallbacks._glutMenuStatusFunc.Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(scope.Env(), status),
+				Napi::Number::New(scope.Env(),x),
+				Napi::Number::New(scope.Env(),y)
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 3, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 3, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutMenuStatusFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutMenuStatusFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
-static Napi::FunctionReference __glutMenuStateFuncCb;
 void _glutMenuStateFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int status) {
-		// Define JS Callback
-		Napi::Env env = __glutMenuStateFuncCb.Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = { Napi::Number::New(env, status) };
-		__glutMenuStateFuncCb.MakeCallback(env.Undefined(), 1, args);
-	};
-	// Remove Unref Callback
-	if (__glutMenuStateFuncCb != nullptr) {
-		__glutMenuStateFuncCb.Unref();
-		__glutMenuStateFuncCb = Napi::Persistent(callbackJS.Value().As<Napi::Function>());
+	// Check Disable Function
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Reset Function
+		globalCallbacks._glutMenuStateFunc.Reset();
+		// Exec Function
+		glutMenuStateFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Setup Reference
+		globalCallbacks._glutMenuStateFunc.Reset(callbackJS, 1U);
+		globalCallbacks._glutMenuStateFunc.SuppressDestruct();
+		// Define Native Callback
+		auto callback = [](int status) {
+			// Define JS Callback
+			Napi::Env env = globalCallbacks._glutMenuStateFunc.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = { Napi::Number::New(env, status) };
+			globalCallbacks._glutMenuStateFunc.MakeCallback(Napi::Object::New(scope.Env()), 1, args);
+		};
+		// Exec Function
+		glutMenuStateFunc(callback);
+		// Return Values
+		return;
 	}
-	// Exec Function
-	glutMenuStateFunc(callback);
-	// Return Values
-	return;
 }
 
 void _glutDisplayFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
+	// Get Current Window Id
+	int wId = glutGetWindow();
 	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
+	Napi::Function callbackJS = info[0].As<Napi::Function>();
+	// Reset Reference
+	windowsCallbacks._glutDisplayFunc[wId].Reset(callbackJS, 1);
 	// Define Native Callback
-	auto callback = [](void *user_data) {
+	auto callback = []() {
+		// Get Current Window
+		int wId = glutGetWindow();
 		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
+		Napi::Function callbackJS = windowsCallbacks._glutDisplayFunc[wId].Value();
+		Napi::Env env = callbackJS.Env();
 		Napi::HandleScope scope(env);
 		// Call JS Callback
 		napi_value args[] = {};
-		callbackJS->MakeCallback(env.Undefined(), 0, args);
-		callbackJS->Unref();
+		callbackJS.MakeCallback(Napi::Object::New(env), 0, args);
 	};
 	// Exec Function
-	glutDisplayFuncUcall(callback, callbackJS);
+	glutDisplayFunc(callback);
 	// Return Values
 	return;
 }
@@ -824,21 +949,26 @@ void _glutOverlayDisplayFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
+	// Get Current Window Id
+	int wId = glutGetWindow();
 	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
+	Napi::Function callbackJS = info[0].As<Napi::Function>();
+	// Reset Reference
+	windowsCallbacks._glutOverlayDisplayFunc[wId].Reset(callbackJS, 1);
 	// Define Native Callback
-	auto callback = [](void *user_data) {
+	auto callback = []() {
+		// Get Current Window
+		int wId = glutGetWindow();
 		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
+		Napi::Function callbackJS = windowsCallbacks._glutOverlayDisplayFunc[wId].Value();
+		Napi::Env env = callbackJS.Env();
 		Napi::HandleScope scope(env);
 		// Call JS Callback
 		napi_value args[] = {};
-		callbackJS->MakeCallback(env.Undefined(), 0, args);
-		callbackJS->Unref();
+		callbackJS.MakeCallback(Napi::Object::New(env), 0, args);
 	};
 	// Exec Function
-	glutOverlayDisplayFuncUcall(callback, callbackJS);
+	glutOverlayDisplayFunc(callback);
 	// Return Values
 	return;
 }
@@ -847,575 +977,921 @@ void _glutReshapeFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int width, int height, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = { Napi::Number::New(env, width), Napi::Number::New(env, height) };
-		callbackJS->MakeCallback(env.Undefined(), 2, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutReshapeFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutReshapeFunc[wId].Reset();
+		// Exec Function
+		glutReshapeFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutReshapeFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int width, int height) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutReshapeFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = { Napi::Number::New(scope.Env(), width), Napi::Number::New(scope.Env(), height) };
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 2, args);
+		};
+		// Exec Function
+		glutReshapeFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutPositionFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int x, int y, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = { Napi::Number::New(env, x), Napi::Number::New(env, y) };
-		callbackJS->MakeCallback(env.Undefined(), 2, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutPositionFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutPositionFunc[wId].Reset();
+		// Exec Function
+		glutPositionFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutPositionFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int x, int y) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutPositionFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = { Napi::Number::New(scope.Env(), x), Napi::Number::New(scope.Env(), y) };
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 2, args);
+		};
+		// Exec Function
+		glutPositionFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutCloseFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {};
-		callbackJS->MakeCallback(env.Undefined(), 0, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutCloseFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutCloseFunc[wId].Reset();
+		// Exec Function
+		glutCloseFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutCloseFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = []() {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutCloseFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 0, args);
+		};
+		// Exec Function
+		glutCloseFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutKeyboardFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](unsigned char key, int x, int y, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, key),
-			Napi::Number::New(env, x),
-			Napi::Number::New(env, y),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutKeyboardFunc[wId].Reset();
+		// Exec Function
+		glutKeyboardFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutKeyboardFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](unsigned char key, int x, int y) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutKeyboardFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, key),
+				Napi::Number::New(env, x),
+				Napi::Number::New(env, y),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 3, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 3, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutKeyboardFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutKeyboardFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutSpecialFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int key, int x, int y, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, key),
-			Napi::Number::New(env, x),
-			Napi::Number::New(env, y),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutSpecialFunc[wId].Reset();
+		// Exec Function
+		glutSpecialFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutSpecialFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int key, int x, int y) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutSpecialFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, key),
+				Napi::Number::New(env, x),
+				Napi::Number::New(env, y),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 3, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 3, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutSpecialFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutSpecialFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutKeyboardUpFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](unsigned char key, int x, int y, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, key),
-			Napi::Number::New(env, x),
-			Napi::Number::New(env, y),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutKeyboardUpFunc[wId].Reset();
+		// Exec Function
+		glutKeyboardUpFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutKeyboardUpFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](unsigned char key, int x, int y) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutKeyboardUpFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, key),
+				Napi::Number::New(env, x),
+				Napi::Number::New(env, y),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 3, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 3, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutKeyboardUpFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutKeyboardUpFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutSpecialUpFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int key, int x, int y, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, key),
-			Napi::Number::New(env, x),
-			Napi::Number::New(env, y),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutSpecialUpFunc[wId].Reset();
+		// Exec Function
+		glutSpecialUpFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutSpecialUpFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int key, int x, int y) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutSpecialUpFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, key),
+				Napi::Number::New(env, x),
+				Napi::Number::New(env, y),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 3, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 3, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutSpecialUpFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutSpecialUpFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutMotionFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int x, int y, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, x),
-			Napi::Number::New(env, y),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutMotionFunc[wId].Reset();
+		// Exec Function
+		glutMotionFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutMotionFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int x, int y) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutMotionFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, x),
+				Napi::Number::New(env, y),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 2, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 2, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutMotionFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutMotionFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutPassiveMotionFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int x, int y, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, x),
-			Napi::Number::New(env, y),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutPassiveMotionFunc[wId].Reset();
+		// Exec Function
+		glutPassiveMotionFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutPassiveMotionFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int x, int y) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutPassiveMotionFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, x),
+				Napi::Number::New(env, y),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 2, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 2, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutPassiveMotionFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutPassiveMotionFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutMouseFunc(const Napi::CallbackInfo& info) {
-	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int button, int state, int x, int y, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, button),
-			Napi::Number::New(env, state),
-			Napi::Number::New(env, x),
-			Napi::Number::New(env, y),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutMouseFunc[wId].Reset();
+		// Exec Function
+		glutMouseFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutMouseFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int button, int state, int x, int y) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutMouseFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, button),
+				Napi::Number::New(env, state),
+				Napi::Number::New(env, x),
+				Napi::Number::New(env, y),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 4, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 4, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutMouseFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutMouseFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutMouseWheelFunc(const Napi::CallbackInfo& info) {
-	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int wheel, int direction, int x, int y, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, wheel),
-			Napi::Number::New(env, direction),
-			Napi::Number::New(env, x),
-			Napi::Number::New(env, y),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutMouseWheelFunc[wId].Reset();
+		// Exec Function
+		glutMouseWheelFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutMouseWheelFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int wheel, int direction, int x, int y) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutMouseWheelFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, wheel),
+				Napi::Number::New(env, direction),
+				Napi::Number::New(env, x),
+				Napi::Number::New(env, y),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 4, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 4, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutMouseWheelFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutMouseWheelFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutEntryFunc(const Napi::CallbackInfo& info) {
-	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int state, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, state),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutEntryFunc[wId].Reset();
+		// Exec Function
+		glutEntryFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutEntryFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int state) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutEntryFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, state),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 1, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 1, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutEntryFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutEntryFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutJoystickFunc(const Napi::CallbackInfo& info) {
-	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	int pollInterval = info[1].As<Napi::Number>().Int32Value();
-	// Define Native Callback
-	auto callback = [](unsigned int buttonMask, int x, int y, int z, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, buttonMask),
-			Napi::Number::New(env, x),
-			Napi::Number::New(env, y),
-			Napi::Number::New(env, z),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutJoystickFunc[wId].Reset();
+		// Exec Function
+		glutJoystickFunc(NULL, 0);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		int pollInterval = info[1].As<Napi::Number>().Int32Value();
+		// Reset Reference
+		windowsCallbacks._glutJoystickFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](unsigned int buttonMask, int x, int y, int z) {
+			// Get Current Window
+				int wId = glutGetWindow();
+				// Define JS Callback
+				Napi::Function callbackJS = windowsCallbacks._glutJoystickFunc[wId].Value();
+				Napi::Env env = callbackJS.Env();
+				Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, buttonMask),
+				Napi::Number::New(env, x),
+				Napi::Number::New(env, y),
+				Napi::Number::New(env, z),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 4, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 4, args);
-		callbackJS->Unref();
-	};
 	// Exec Function
-	glutJoystickFuncUcall(callback, pollInterval, callbackJS);
+	glutJoystickFunc(callback, pollInterval);
 	// Return Values
 	return;
+}
 }
 
 void _glutSpaceballMotionFunc(const Napi::CallbackInfo& info) {
-	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int x, int y, int z, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, x),
-			Napi::Number::New(env, y),
-			Napi::Number::New(env, z),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutSpaceballMotionFunc[wId].Reset();
+		// Exec Function
+		glutSpaceballMotionFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutSpaceballMotionFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int x, int y, int z) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutSpaceballMotionFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, x),
+				Napi::Number::New(env, y),
+				Napi::Number::New(env, z),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 3, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 3, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutSpaceballMotionFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutSpaceballMotionFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutSpaceballRotateFunc(const Napi::CallbackInfo& info) {
-	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int rx, int ry, int rz, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, rx),
-			Napi::Number::New(env, ry),
-			Napi::Number::New(env, rz),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutSpaceballRotateFunc[wId].Reset();
+		// Exec Function
+		glutSpaceballRotateFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutSpaceballRotateFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int rx, int ry, int rz) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutSpaceballRotateFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, rx),
+				Napi::Number::New(env, ry),
+				Napi::Number::New(env, rz),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 3, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 3, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutSpaceballRotateFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutSpaceballRotateFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutSpaceballButtonFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int button, int updown, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, button),
-			Napi::Number::New(env, updown),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutSpaceballButtonFunc[wId].Reset();
+		// Exec Function
+		glutSpaceballButtonFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutSpaceballButtonFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int button, int updown) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutSpaceballButtonFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, button),
+				Napi::Number::New(env, updown),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 2, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 2, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutSpaceballButtonFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutSpaceballButtonFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutButtonBoxFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int button, int updown, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, button),
-			Napi::Number::New(env, updown),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutButtonBoxFunc[wId].Reset();
+		// Exec Function
+		glutButtonBoxFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutButtonBoxFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int button, int updown) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutButtonBoxFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, button),
+				Napi::Number::New(env, updown),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 2, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 2, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutButtonBoxFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutButtonBoxFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutDialsFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int dial, int value, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, dial),
-			Napi::Number::New(env, value),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutDialsFunc[wId].Reset();
+		// Exec Function
+		glutDialsFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutDialsFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int dial, int value) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutDialsFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, dial),
+				Napi::Number::New(env, value),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 2, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 2, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutDialsFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutDialsFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutTabletMotionFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int x, int y, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, x),
-			Napi::Number::New(env, y),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutTabletMotionFunc[wId].Reset();
+		// Exec Function
+		glutTabletMotionFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutTabletMotionFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int x, int y) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutTabletMotionFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, x),
+				Napi::Number::New(env, y),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 2, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 2, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutTabletMotionFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutTabletMotionFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutTabletButtonFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int button, int updown, int x, int y, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, button),
-			Napi::Number::New(env, updown),
-			Napi::Number::New(env, x),
-			Napi::Number::New(env, y),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutTabletButtonFunc[wId].Reset();
+		// Exec Function
+		glutTabletButtonFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutTabletButtonFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int button, int updown, int x, int y) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutTabletButtonFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, button),
+				Napi::Number::New(env, updown),
+				Napi::Number::New(env, x),
+				Napi::Number::New(env, y),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 4, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 4, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutTabletButtonFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutTabletButtonFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutVisibilityFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int state,void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, state)
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutVisibilityFunc[wId].Reset();
+		// Exec Function
+		glutVisibilityFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutVisibilityFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int state) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutVisibilityFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, state)
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 1, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 1, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutVisibilityFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutVisibilityFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutWindowStatusFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int state,void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, state)
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutWindowStatusFunc[wId].Reset();
+		// Exec Function
+		glutWindowStatusFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutWindowStatusFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int state) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutWindowStatusFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, state)
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 1, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 1, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutWindowStatusFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutWindowStatusFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutSetOption(const Napi::CallbackInfo& info) {
@@ -2146,161 +2622,260 @@ void _glutCopyColormap(const Napi::CallbackInfo& info) {
 	return;
 }
 
+
+
+
 void _glutMultiEntryFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int id, int status, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, id),
-			Napi::Number::New(env, status)
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutMultiEntryFunc[wId].Reset();
+		// Exec Function
+		glutMultiEntryFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutMultiEntryFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int id, int status) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutMultiEntryFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, id),
+				Napi::Number::New(env, status)
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 2, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 2, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutMultiEntryFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutMultiEntryFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutMultiButtonFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int id, int x, int y, int button, int status, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, id),
-			Napi::Number::New(env, x),
-			Napi::Number::New(env, y),
-			Napi::Number::New(env, button),
-			Napi::Number::New(env, status)
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutMultiButtonFunc[wId].Reset();
+		// Exec Function
+		glutMultiButtonFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutMultiButtonFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int id, int x, int y, int button, int status) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutMultiButtonFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, id),
+				Napi::Number::New(env, x),
+				Napi::Number::New(env, y),
+				Napi::Number::New(env, button),
+				Napi::Number::New(env, status)
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 5, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 5, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutMultiButtonFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutMultiButtonFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutMultiMotionFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int id, int x, int y, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, id),
-			Napi::Number::New(env, x),
-			Napi::Number::New(env, y),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutMultiMotionFunc[wId].Reset();
+		// Exec Function
+		glutMultiMotionFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutMultiMotionFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int id, int x, int y) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutMultiMotionFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, id),
+				Napi::Number::New(env, x),
+				Napi::Number::New(env, y),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 3, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 3, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutMultiMotionFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutMultiMotionFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutMultiPassiveFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int id, int x, int y, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, id),
-			Napi::Number::New(env, x),
-			Napi::Number::New(env, y),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutMultiPassiveFunc[wId].Reset();
+		// Exec Function
+		glutMultiPassiveFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutMultiPassiveFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int id, int x, int y) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutMultiPassiveFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, id),
+				Napi::Number::New(env, x),
+				Napi::Number::New(env, y),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 3, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 3, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutMultiPassiveFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutMultiPassiveFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutInitContextFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {};
-		callbackJS->MakeCallback(env.Undefined(), 0, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutInitContextFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutInitContextFunc[wId].Reset();
+		// Exec Function
+		glutInitContextFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutInitContextFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = []() {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutInitContextFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 0, args);
+		};
+		// Exec Function
+		glutInitContextFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutAppStatusFunc(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	// Load Params
-	const Napi::FunctionReference& callbackJS = Napi::Persistent(info[0].As<Napi::Function>());
-	// Define Native Callback
-	auto callback = [](int event, void *user_data) {
-		// Define JS Callback
-		Napi::FunctionReference *callbackJS = (Napi::FunctionReference *) user_data;
-		Napi::Env env = callbackJS->Env();
-		Napi::HandleScope scope(env);
-		// Call JS Callback
-		napi_value args[] = {
-			Napi::Number::New(env, event),
+	if (info[0].IsNull() || info[0].IsUndefined()) {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Reset Function
+		windowsCallbacks._glutAppStatusFunc[wId].Reset();
+		// Exec Function
+		glutAppStatusFunc(NULL);
+		// Return Values
+		return;
+	} else {
+		// Get Current Window Id
+		int wId = glutGetWindow();
+		// Load Params
+		Napi::Function callbackJS = info[0].As<Napi::Function>();
+		// Reset Reference
+		windowsCallbacks._glutAppStatusFunc[wId].Reset(callbackJS, 1);
+		// Define Native Callback
+		auto callback = [](int event) {
+			// Get Current Window
+			int wId = glutGetWindow();
+			// Define JS Callback
+			Napi::Function callbackJS = windowsCallbacks._glutAppStatusFunc[wId].Value();
+			Napi::Env env = callbackJS.Env();
+			Napi::HandleScope scope(env);
+			// Call JS Callback
+			napi_value args[] = {
+				Napi::Number::New(env, event),
+			};
+			callbackJS.MakeCallback(Napi::Object::New(scope.Env()), 1, args);
 		};
-		callbackJS->MakeCallback(env.Undefined(), 1, args);
-		callbackJS->Unref();
-	};
-	// Exec Function
-	glutAppStatusFuncUcall(callback, callbackJS);
-	// Return Values
-	return;
+		// Exec Function
+		glutAppStatusFunc(callback);
+		// Return Values
+		return;
+	}
 }
 
 void _glutSetKeyRepeat(const Napi::CallbackInfo& info) {
