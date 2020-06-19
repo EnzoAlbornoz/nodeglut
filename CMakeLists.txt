@@ -11,7 +11,7 @@ string(REPLACE "\"" "" NODE_ADDON_API_DIR ${NODE_ADDON_API_DIR})
 # Name of the project (will be the name of the plugin)
 project(nodeglut VERSION 0.1.0)
 # Build a shared library named after the project from the files in `src/`
-file(GLOB SOURCE_FILES "src/*.cc" "src/*.h")
+file(GLOB SOURCE_FILES "src/*.cc" "src/*.hh")
 add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
 # Try find libraries
 find_package(GLUT REQUIRED)
