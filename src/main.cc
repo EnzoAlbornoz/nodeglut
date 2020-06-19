@@ -1,7 +1,10 @@
 #include <napi.h>
 #include "calls.hh"
+#include "constants.hh"
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
+	// Setup Constants
+	exports.Set(Napi::String::New(env, "constants"), InitConstants(env, Napi::Object::New(env)));
 	// Setup Calls
 	// glutInit
 	exports.Set(Napi::String::New(env, "glutInit"), Napi::Function::New(env, _glutInit));
