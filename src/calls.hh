@@ -88,7 +88,7 @@
 	Napi::Number _glutGetModifiers(const Napi::CallbackInfo& info);
 	Napi::Number _glutLayerGet(const Napi::CallbackInfo& info);
 	Napi::Number _glutExtensionSupported(const Napi::CallbackInfo& info);
-	Napi::External<GLUTproc> _glutGetProcAddress(const Napi::CallbackInfo& info);
+	Napi::BigInt _glutGetProcAddress(const Napi::CallbackInfo& info);
 	void _glutBitmapCharacter(const Napi::CallbackInfo& info);
 	void _glutBitmapString(const Napi::CallbackInfo& info);
 	Napi::Number _glutBitmapWidth(const Napi::CallbackInfo& info);

@@ -1966,7 +1966,7 @@ Napi::Number _glutExtensionSupported(const Napi::CallbackInfo& info) {
 	return Napi::Number::New(env, extSupported);
 }
 
-Napi::External<GLUTproc> _glutGetProcAddress(const Napi::CallbackInfo& info) {
+Napi::BigInt _glutGetProcAddress(const Napi::CallbackInfo& info) {
 	// Handle Env
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
@@ -1975,7 +1975,7 @@ Napi::External<GLUTproc> _glutGetProcAddress(const Napi::CallbackInfo& info) {
 	// Exec Function
 	GLUTproc procAddr = glutGetProcAddress(procName);
 	// Return Values
-	return Napi::External<GLUTproc>::New(env, &procAddr);
+	return Napi::BigInt::New(env,(uintptr_t) procAddr);
 }
 
 void _glutBitmapCharacter(const Napi::CallbackInfo& info) {
