@@ -2,9 +2,24 @@
 	"name": "nodeglut",
 	"version": "0.1.0",
 	"description": "FreeGLUT bindings for Node.JS",
-	"main": "index.js",
-	"author": "Enzo Coelho Albornoz <enzocoelhoalbornoz@gmail.com>",
+	"keywords": [
+		"opengl",
+		"glut",
+		"freeglut",
+		"graphics"
+	],
+	"os": ["linux"],
+	"homepage": "https://github.com/EnzoAlbornoz/nodeglut#README.md",
+	"bugs": {
+		"url": "https://github.com/EnzoAlbornoz/nodeglut/issues"
+	},
 	"license": "MIT",
+	"author": "Enzo Coelho Albornoz <enzocoelhoalbornoz@gmail.com>",
+	"main": "index.js",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/EnzoAlbornoz/nodeglut.git"
+	},
 	"private": false,
 	"scripts": {
 		"build": "cmake-js build",
