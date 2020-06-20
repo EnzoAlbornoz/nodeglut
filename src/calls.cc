@@ -1983,7 +1983,8 @@ void _glutBitmapCharacter(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
 	// Load Params
-	void* font = info[0].As<Napi::Buffer<unsigned char>>().Data();
+	bool lossless;
+	void* font = info[0].IsBigInt() ? (void*) ((uintptr_t) info[0].As<Napi::BigInt>().Uint64Value(&lossless)) : info[0].As<Napi::Buffer<unsigned char>>().Data();
 	int character = info[1].As<Napi::Number>().Int32Value();
 	// Exec Function
 	glutBitmapCharacter(font, character);
@@ -1996,7 +1997,8 @@ void _glutBitmapString(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
 	// Load Params
-	void* font = info[0].As<Napi::Buffer<unsigned char>>().Data();
+	bool lossless;
+	void* font = info[0].IsBigInt() ? (void*) ((uintptr_t) info[0].As<Napi::BigInt>().Uint64Value(&lossless)) : info[0].As<Napi::Buffer<unsigned char>>().Data();
 	const unsigned char* string = reinterpret_cast<const unsigned char*>(
 		info[1].As<Napi::String>().Utf8Value().c_str()
 	);
@@ -2011,7 +2013,8 @@ Napi::Number _glutBitmapWidth(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
 	// Load Params
-	void* font = info[0].As<Napi::Buffer<unsigned char>>().Data();
+	bool lossless;
+	void* font = info[0].IsBigInt() ? (void*) ((uintptr_t) info[0].As<Napi::BigInt>().Uint64Value(&lossless)) : info[0].As<Napi::Buffer<unsigned char>>().Data();
 	int character = info[1].As<Napi::Number>().Int32Value();
 	// Exec Function
 	int width = glutBitmapWidth(font, character);
@@ -2024,7 +2027,8 @@ Napi::Number _glutBitmapLength(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
 	// Load Params
-	void* font = info[0].As<Napi::Buffer<unsigned char>>().Data();
+	bool lossless;
+	void* font = info[0].IsBigInt() ? (void*) ((uintptr_t) info[0].As<Napi::BigInt>().Uint64Value(&lossless)) : info[0].As<Napi::Buffer<unsigned char>>().Data();
 	const unsigned char* string = reinterpret_cast<const unsigned char*>(
 		info[1].As<Napi::String>().Utf8Value().c_str()
 	);
@@ -2039,7 +2043,8 @@ Napi::Number _glutBitmapHeight(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
 	// Load Params
-	void* font = info[0].As<Napi::Buffer<unsigned char>>().Data();
+	bool lossless;
+	void* font = info[0].IsBigInt() ? (void*) ((uintptr_t) info[0].As<Napi::BigInt>().Uint64Value(&lossless)) : info[0].As<Napi::Buffer<unsigned char>>().Data();
 	// Exec Function
 	int height = glutBitmapHeight(font);
 	// Return Values
@@ -2051,7 +2056,8 @@ void _glutStrokeCharacter(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
 	// Load Params
-	void* font = info[0].As<Napi::Buffer<unsigned char>>().Data();
+	bool lossless;
+	void* font = info[0].IsBigInt() ? (void*) ((uintptr_t) info[0].As<Napi::BigInt>().Uint64Value(&lossless)) : info[0].As<Napi::Buffer<unsigned char>>().Data();
 	int character = info[1].As<Napi::Number>().Int32Value();
 	// Exec Function
 	glutStrokeCharacter(font, character);
@@ -2064,7 +2070,8 @@ void _glutStrokeString(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
 	// Load Params
-	void* font = info[0].As<Napi::Buffer<unsigned char>>().Data();
+	bool lossless;
+	void* font = info[0].IsBigInt() ? (void*) ((uintptr_t) info[0].As<Napi::BigInt>().Uint64Value(&lossless)) : info[0].As<Napi::Buffer<unsigned char>>().Data();
 	const unsigned char* string = reinterpret_cast<const unsigned char*>(
 		info[1].As<Napi::String>().Utf8Value().c_str()
 	);
@@ -2079,7 +2086,8 @@ Napi::Number _glutStrokeWidth(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
 	// Load Params
-	void* font = info[0].As<Napi::Buffer<unsigned char>>().Data();
+	bool lossless;
+	void* font = info[0].IsBigInt() ? (void*) ((uintptr_t) info[0].As<Napi::BigInt>().Uint64Value(&lossless)) : info[0].As<Napi::Buffer<unsigned char>>().Data();
 	int character = info[1].As<Napi::Number>().Int32Value();
 	// Exec Function
 	int width = glutStrokeWidth(font, character);
@@ -2092,7 +2100,8 @@ Napi::Number _glutStrokeWidthf(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
 	// Load Params
-	void* font = info[0].As<Napi::Buffer<unsigned char>>().Data();
+	bool lossless;
+	void* font = info[0].IsBigInt() ? (void*) ((uintptr_t) info[0].As<Napi::BigInt>().Uint64Value(&lossless)) : info[0].As<Napi::Buffer<unsigned char>>().Data();
 	int character = info[1].As<Napi::Number>().Int32Value();
 	// Exec Function
 	GLfloat width = glutStrokeWidthf(font, character);
@@ -2105,7 +2114,8 @@ Napi::Number _glutStrokeLength(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
 	// Load Params
-	void* font = info[0].As<Napi::Buffer<unsigned char>>().Data();
+	bool lossless;
+	void* font = info[0].IsBigInt() ? (void*) ((uintptr_t) info[0].As<Napi::BigInt>().Uint64Value(&lossless)) : info[0].As<Napi::Buffer<unsigned char>>().Data();
 	const unsigned char* string = reinterpret_cast<const unsigned char*>(
 		info[1].As<Napi::String>().Utf8Value().c_str()
 	);
@@ -2120,7 +2130,8 @@ Napi::Number _glutStrokeLengthf(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
 	// Load Params
-	void* font = info[0].As<Napi::Buffer<unsigned char>>().Data();
+	bool lossless;
+	void* font = info[0].IsBigInt() ? (void*) ((uintptr_t) info[0].As<Napi::BigInt>().Uint64Value(&lossless)) : info[0].As<Napi::Buffer<unsigned char>>().Data();
 	const unsigned char* string = reinterpret_cast<const unsigned char*>(
 		info[1].As<Napi::String>().Utf8Value().c_str()
 	);
@@ -2135,7 +2146,8 @@ Napi::Number _glutStrokeHeight(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
 	// Load Params
-	void* font = info[0].As<Napi::Buffer<unsigned char>>().Data();
+	bool lossless;
+	void* font = info[0].IsBigInt() ? (void*) ((uintptr_t) info[0].As<Napi::BigInt>().Uint64Value(&lossless)) : info[0].As<Napi::Buffer<unsigned char>>().Data();
 	// Exec Function
 	GLfloat height = glutStrokeHeight(font);
 	// Return Values
